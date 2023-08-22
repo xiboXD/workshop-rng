@@ -1,6 +1,5 @@
 using AElf.Sdk.CSharp;
 using Google.Protobuf.WellKnownTypes;
-using System.Collections.Generic;
 
 namespace AElf.Contracts.HelloWorld
 {
@@ -21,6 +20,14 @@ namespace AElf.Contracts.HelloWorld
             return new Empty();
         }
 
+        public override Empty Initialize(Empty input)
+        {
+            Assert(!State.Initialized.Value, "already initialized");
+            State.RandomNumberContract.Value =
+                Context.GetContractAddressByName(SmartContractConstants.ConsensusContractSystemName);
+            return new Empty();
+        }
+
         // Method to read the current message value
         public override StringValue Read(Empty input)
         {
@@ -31,57 +38,29 @@ namespace AElf.Contracts.HelloWorld
             {
                 Value = value
             };
-
         }
 
-        private List<int> GenerateThreeRandomNumber()
+        public override Character CreateCharacter(Empty input)
         {
-            var attributes = new List<int>();
-            var randomBytes = State.RandomNumberContract.GetRandomBytes.Call(new Int64Value { Value = Context.CurrentHeight - 1 }.ToBytesValue());
+            var existing = State.Characters[Context.Sender];
+            Assert(existing == null, "already has a character");
+            var randomBytes = State.RandomNumberContract.GetRandomBytes
+                .Call(new Int64Value { Value = Context.CurrentHeight - 1 }.ToBytesValue()).Value.ToByteArray();
+            var hash = HashHelper.ComputeFrom(Context.Sender).Value.ToByteArray();
 
-            for (int i = 0; i < 3; i++)
+            var character = new Character
             {
-                int intValue = 0;
-                int startIndex = i * 4; // Start index for every 4 bytes
-
-                for (int m = 0; m < 4; m++) // Loop through 4 bytes
-                {
-                    intValue <<= 8; // Shift left by 8 bits
-                    intValue |= randomBytes.ToString()[startIndex + m]; // OR with the current byte value
-                }
-
-                var attribute = (intValue % 6 + 5) % 6 + 1;
-                attributes.Add(attribute);
-            }
-
-            return attributes;
-        }
-
-        public override Empty CreateRandomCharacter(Empty input)
-        {
-            State.RandomNumberContract.Value =
-                    Context.GetContractAddressByName(SmartContractConstants.ConsensusContractSystemName);
-            var attributes = GenerateThreeRandomNumber();
-            var sum = attributes[0] + attributes[1] + attributes[2];
-            var health = 30 * attributes[0] / sum;
-            var strength = 30 * attributes[1] / sum;
-            var speed = 30 - health - strength;
-            var character = new StringValue
-            {
-                Value = $"Here is your character, HP is {health}, strength is {strength}, speed is {speed}"
+                Health = 60 + (randomBytes[0] ^ hash[0]) % 41, // Health is 60 ~ 100
+                Strength = 40 + (randomBytes[1] ^ hash[1]) % 61, // Strength is 40 ~ 100
+                Speed = 100 + (randomBytes[2] ^ hash[2]) % 101 // Strength is 100 ~ 200
             };
-            State.Character.Value = character.Value;
-            return new Empty();
+            State.Characters[Context.Sender] = character;
+            return character;
         }
-        public override StringValue GetRandomCharacter(Empty input)
+
+        public override Character GetMyCharacter(Empty input)
         {
-            var value = State.Character.Value;
-            // Return value retrieved 
-            return new StringValue
-            {
-                Value = value
-            };
+            return State.Characters[Context.Sender] ?? new Character();
         }
     }
-    
 }

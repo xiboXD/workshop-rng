@@ -3,6 +3,7 @@ using Google.Protobuf.WellKnownTypes;
 using Shouldly;
 using Xunit;
 using System;
+using AElf.Sdk.CSharp;
 
 namespace AElf.Contracts.HelloWorld
 {
@@ -25,13 +26,14 @@ namespace AElf.Contracts.HelloWorld
         }
         
         [Fact]
-        public async Task Random_Test()
+        public async Task Rng_Test()
         {
-            // Arrange
-            await HelloWorldStub.CreateRandomCharacter.SendAsync(new Empty());
-
-            var result = await HelloWorldStub.GetRandomCharacter.CallAsync(new Empty());
-            result.Value.ShouldNotBeNull();
+            await HelloWorldStub.Initialize.SendAsync(new Empty());
+            var result = await HelloWorldStub.CreateCharacter.SendAsync(new Empty());
+            var character = await HelloWorldStub.GetMyCharacter.CallAsync(new Empty());
+            
+            Assert.NotEqual(new Character(), character);
+            Assert.Equal(result.Output, character);
         }
     }
     
